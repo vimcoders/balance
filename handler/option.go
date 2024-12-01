@@ -61,7 +61,7 @@ type Option struct {
 
 func (x *Handler) Parse() error {
 	var fileName string
-	flag.StringVar(&fileName, "option", "balance.conf", "balance.conf")
+	flag.StringVar(&fileName, "option", "balance.yaml", "balance.yaml")
 	flag.Parse()
 	ymalBytes, err := os.ReadFile(fileName)
 	if err != nil {
