@@ -15,16 +15,29 @@ import (
 
 	"github.com/vimcoders/go-driver/grpcx"
 	"github.com/vimcoders/go-driver/log"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
 
+type Method struct {
+	MethodName string
+	Request    proto.Message
+	Reply      proto.Message
+}
+
+func (x Method) Clone() *Method {
+	return &Method{
+		MethodName: x.MethodName,
+		Request:    x.Request.ProtoReflect().New().Interface(),
+		Reply:      x.Reply.ProtoReflect().New().Interface(),
+	}
+}
+
 type Session struct {
-	buffsize int
-	timeout  time.Duration
 	net.Conn
 	grpcx.Client
-	Methods []grpc.MethodDesc
+	buffsize int
+	timeout  time.Duration
+	Methods  []Method
 	pb.UnimplementedParkourServer
 }
 
@@ -57,7 +70,6 @@ func (x *Session) serve(ctx context.Context) (err error) {
 			return errors.New("shutdown")
 		default:
 		}
-		log.Debug(x.timeout)
 		if err := x.Conn.SetReadDeadline(time.Now().Add(x.timeout)); err != nil {
 			return err
 		}
@@ -65,29 +77,18 @@ func (x *Session) serve(ctx context.Context) (err error) {
 		if err != nil {
 			return err
 		}
-		log.Debug(iMessage)
 		if x == nil {
 			continue
 		}
-		var req interface{}
-		method, payload := iMessage.method(), iMessage.payload()
-		dec := func(in any) error {
-			if err := proto.Unmarshal(payload, in.(proto.Message)); err != nil {
-				return err
-			}
-			req = in
-			return nil
-		}
-		reply, err := x.Methods[method].Handler(x, ctx, dec, nil)
-		if err != nil {
+		method := x.Methods[iMessage.method()]
+		methodName, req, reply := method.MethodName, method.Request, method.Reply
+		if err := proto.Unmarshal(iMessage.payload(), method.Request); err != nil {
 			return err
 		}
-		// 从网关转发到远程接口调用
-		if err := x.Invoke(ctx, x.Methods[method].MethodName, req, reply); err != nil {
+		if err := x.Invoke(ctx, methodName, req, reply); err != nil {
 			return err
 		}
-		log.Debug("Invoke", reply, req)
-		b, err := encode(method, reply.(proto.Message))
+		b, err := encode(iMessage.method(), method.Reply)
 		if err != nil {
 			return err
 		}

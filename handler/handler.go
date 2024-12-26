@@ -39,7 +39,6 @@ func (x *Handler) Handle(ctx context.Context, c net.Conn) {
 		buffsize: 1024,
 		timeout:  time.Second * 30,
 		Conn:     c,
-		Methods:  pb.Parkour_ServiceDesc.Methods,
 		Client:   x.Client,
 	}
 	go newSession.serve(ctx)

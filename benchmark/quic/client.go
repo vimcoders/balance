@@ -120,22 +120,21 @@ func (x Message) WriteTo(w io.Writer) (n int64, err error) {
 }
 
 type Client struct {
+	net.Conn
 	buffsize int
 	timeout  time.Duration
-	net.Conn
-	Methods []grpc.MethodDesc
+	Methods  []grpc.MethodDesc
 }
 
-func (x *Client) Go(ctx context.Context, req proto.Message) (err error) {
+func (x *Client) Go(ctx context.Context, metodName string, req proto.Message) (err error) {
 	defer func() {
 		if err != nil {
 			log.Error(err)
 			debug.PrintStack()
 		}
 	}()
-	metodName := proto.MessageName(req)
 	for methodId := 0; methodId < len(x.Methods); methodId++ {
-		if ok := strings.Contains(string(metodName), x.Methods[methodId].MethodName); !ok {
+		if ok := strings.EqualFold(metodName, x.Methods[methodId].MethodName); !ok {
 			continue
 		}
 		if err := x.push(uint16(methodId), req); err != nil {
@@ -167,7 +166,7 @@ func (x *Client) BenchmarkLogin(ctx context.Context) {
 			return
 		default:
 			log.Info("BenchmarkLogin")
-			x.Go(ctx, &pb.PingRequest{Message: []byte("hello")})
+			x.Go(ctx, "Ping", &pb.PingRequest{Message: []byte("hello")})
 		}
 	}
 }
