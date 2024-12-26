@@ -12,7 +12,7 @@ import (
 type Session struct {
 	total uint64
 	unix  int64
-	pb.UnimplementedParkourServer
+	pb.ParkourClient
 }
 
 func (x *Session) Ping(ctx context.Context, req *pb.PingRequest) (*pb.PingResponse, error) {

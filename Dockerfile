@@ -14,6 +14,6 @@ RUN go build -o /app/balance main.go
 FROM scratch
 ENV TZ Asia/Shanghai
 WORKDIR /app
-COPY --from=builder /app/balance /app/balance
-COPY --from=builder /build/balance.yaml /app/balance.yaml
-CMD ["./balance"]
+COPY --from=builder /app/balance .
+COPY --from=builder /build/balance.yaml .
+CMD ["./balance", "-f", "balance.yaml"]

@@ -19,9 +19,7 @@ import (
 const _ = grpc.SupportPackageIsVersion8
 
 const (
-	Parkour_Ping_FullMethodName  = "/pb.Parkour/Ping"
-	Parkour_Login_FullMethodName = "/pb.Parkour/Login"
-	Parkour_Chat_FullMethodName  = "/pb.Parkour/Chat"
+	Parkour_Ping_FullMethodName = "/pb.Parkour/Ping"
 )
 
 // ParkourClient is the client API for Parkour service.
@@ -29,8 +27,6 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ParkourClient interface {
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
-	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
-	Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error)
 }
 
 type parkourClient struct {
@@ -51,33 +47,11 @@ func (c *parkourClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.
 	return out, nil
 }
 
-func (c *parkourClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(LoginResponse)
-	err := c.cc.Invoke(ctx, Parkour_Login_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *parkourClient) Chat(ctx context.Context, in *ChatRequest, opts ...grpc.CallOption) (*ChatResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ChatResponse)
-	err := c.cc.Invoke(ctx, Parkour_Chat_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // ParkourServer is the server API for Parkour service.
 // All implementations must embed UnimplementedParkourServer
 // for forward compatibility
 type ParkourServer interface {
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
-	Login(context.Context, *LoginRequest) (*LoginResponse, error)
-	Chat(context.Context, *ChatRequest) (*ChatResponse, error)
 	mustEmbedUnimplementedParkourServer()
 }
 
@@ -87,12 +61,6 @@ type UnimplementedParkourServer struct {
 
 func (UnimplementedParkourServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
-}
-func (UnimplementedParkourServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
-}
-func (UnimplementedParkourServer) Chat(context.Context, *ChatRequest) (*ChatResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Chat not implemented")
 }
 func (UnimplementedParkourServer) mustEmbedUnimplementedParkourServer() {}
 
@@ -125,42 +93,6 @@ func _Parkour_Ping_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Parkour_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LoginRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ParkourServer).Login(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Parkour_Login_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ParkourServer).Login(ctx, req.(*LoginRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _Parkour_Chat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ChatRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ParkourServer).Chat(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Parkour_Chat_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ParkourServer).Chat(ctx, req.(*ChatRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // Parkour_ServiceDesc is the grpc.ServiceDesc for Parkour service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -171,14 +103,6 @@ var Parkour_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _Parkour_Ping_Handler,
-		},
-		{
-			MethodName: "Login",
-			Handler:    _Parkour_Login_Handler,
-		},
-		{
-			MethodName: "Chat",
-			Handler:    _Parkour_Chat_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
