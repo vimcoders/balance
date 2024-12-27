@@ -19,7 +19,6 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Parkour_Ping_FullMethodName  = "/pb.Parkour/Ping"
 	Parkour_Login_FullMethodName = "/pb.Parkour/Login"
 )
 
@@ -27,7 +26,6 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ParkourClient interface {
-	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 }
 
@@ -37,16 +35,6 @@ type parkourClient struct {
 
 func NewParkourClient(cc grpc.ClientConnInterface) ParkourClient {
 	return &parkourClient{cc}
-}
-
-func (c *parkourClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PingResponse)
-	err := c.cc.Invoke(ctx, Parkour_Ping_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *parkourClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error) {
@@ -63,7 +51,6 @@ func (c *parkourClient) Login(ctx context.Context, in *LoginRequest, opts ...grp
 // All implementations must embed UnimplementedParkourServer
 // for forward compatibility.
 type ParkourServer interface {
-	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	mustEmbedUnimplementedParkourServer()
 }
@@ -75,9 +62,6 @@ type ParkourServer interface {
 // pointer dereference when methods are called.
 type UnimplementedParkourServer struct{}
 
-func (UnimplementedParkourServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
-}
 func (UnimplementedParkourServer) Login(context.Context, *LoginRequest) (*LoginResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Login not implemented")
 }
@@ -100,24 +84,6 @@ func RegisterParkourServer(s grpc.ServiceRegistrar, srv ParkourServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&Parkour_ServiceDesc, srv)
-}
-
-func _Parkour_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ParkourServer).Ping(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Parkour_Ping_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ParkourServer).Ping(ctx, req.(*PingRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _Parkour_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -145,10 +111,6 @@ var Parkour_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "pb.Parkour",
 	HandlerType: (*ParkourServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "Ping",
-			Handler:    _Parkour_Ping_Handler,
-		},
 		{
 			MethodName: "Login",
 			Handler:    _Parkour_Login_Handler,

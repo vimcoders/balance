@@ -1,21 +1,17 @@
 syntax = "proto3";
 package pb;
 option go_package = "../pb";
-import "login.proto";
-//import "chat.proto";
 
-message PingRequest {
-	bytes Message = 1;
+message LoginRequest {
+	string Token = 1;
 }
 
-message PingResponse {
-	bytes Message = 1;
+message LoginResponse {
+	int32 Code = 1;
 }
 
 service Parkour {
-	rpc Ping(PingRequest) returns (PingResponse) {}
 	rpc Login(LoginRequest) returns (LoginResponse) {}
-	// rpc Chat(ChatRequest) returns (ChatResponse) {}
 }
 
 // protoc --go_out=../ --go-grpc_out=../ *.proto

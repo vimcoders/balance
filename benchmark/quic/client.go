@@ -17,7 +17,6 @@ import (
 
 	"github.com/vimcoders/go-driver/log"
 	"github.com/vimcoders/go-driver/quicx"
-	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -119,11 +118,27 @@ func (x Message) WriteTo(w io.Writer) (n int64, err error) {
 	return n, nil
 }
 
+type Method struct {
+	Id         uint16
+	MethodName string
+	Request    proto.Message
+	Reply      proto.Message
+}
+
+func (x Method) Clone() Method {
+	return Method{
+		Id:         x.Id,
+		MethodName: x.MethodName,
+		Request:    x.Request.ProtoReflect().New().Interface(),
+		Reply:      x.Reply.ProtoReflect().New().Interface(),
+	}
+}
+
 type Client struct {
 	net.Conn
 	buffsize int
 	timeout  time.Duration
-	Methods  []grpc.MethodDesc
+	Methods  []Method
 }
 
 func (x *Client) Go(ctx context.Context, metodName string, req proto.Message) (err error) {
@@ -133,11 +148,11 @@ func (x *Client) Go(ctx context.Context, metodName string, req proto.Message) (e
 			debug.PrintStack()
 		}
 	}()
-	for methodId := 0; methodId < len(x.Methods); methodId++ {
-		if ok := strings.EqualFold(metodName, x.Methods[methodId].MethodName); !ok {
+	for i := 0; i < len(x.Methods); i++ {
+		if ok := strings.EqualFold(metodName, x.Methods[i].MethodName); !ok {
 			continue
 		}
-		if err := x.push(uint16(methodId), req); err != nil {
+		if err := x.push(x.Methods[i].Id, req); err != nil {
 			return err
 		}
 		return nil
@@ -166,7 +181,7 @@ func (x *Client) BenchmarkLogin(ctx context.Context) {
 			return
 		default:
 			log.Info("BenchmarkLogin")
-			x.Go(ctx, "Ping", &pb.PingRequest{Message: []byte("hello")})
+			x.Go(ctx, "Login", &pb.LoginRequest{Token: "token"})
 		}
 	}
 }
@@ -182,11 +197,36 @@ func Dail(address string) *Client {
 	if err != nil {
 		panic(err)
 	}
+	var methods []Method
+	for i := 0; i < len(pb.Parkour_ServiceDesc.Methods); i++ {
+		var newMethod Method
+		method := pb.Parkour_ServiceDesc.Methods[i]
+		resp, _ := method.Handler(&pb.UnimplementedParkourServer{}, context.Background(), func(in any) error {
+			newMethod.Request = in.(proto.Message)
+			return nil
+		}, nil)
+		newMethod.Id = uint16(len(methods) + 512)
+		newMethod.MethodName = method.MethodName
+		newMethod.Reply = resp.(proto.Message)
+		methods = append(methods, newMethod)
+	}
+	for i := 0; i < len(pb.Chat_ServiceDesc.Methods); i++ {
+		var newMethod Method
+		method := pb.Chat_ServiceDesc.Methods[i]
+		resp, _ := method.Handler(&pb.UnimplementedChatServer{}, context.Background(), func(in any) error {
+			newMethod.Request = in.(proto.Message)
+			return nil
+		}, nil)
+		newMethod.Id = uint16(len(methods) + 512)
+		newMethod.MethodName = method.MethodName
+		newMethod.Reply = resp.(proto.Message)
+		methods = append(methods, newMethod)
+	}
 	return &Client{
 		Conn:     conn,
 		timeout:  time.Minute,
 		buffsize: 1024,
-		Methods:  pb.Parkour_ServiceDesc.Methods,
+		Methods:  methods,
 	}
 }
 

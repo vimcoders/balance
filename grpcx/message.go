@@ -1,101 +1,14 @@
-package handler
+package grpcx
 
 import (
-	"balance/pb"
 	"bufio"
-	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
-	"net"
-	"runtime/debug"
 	"sync"
-	"time"
 
-	"github.com/vimcoders/go-driver/grpcx"
-	"github.com/vimcoders/go-driver/log"
 	"google.golang.org/protobuf/proto"
 )
-
-type Method struct {
-	Id          uint16
-	ServiceName string
-	MethodName  string
-	Request     proto.Message
-	Reply       proto.Message
-}
-
-func (x Method) Clone() Method {
-	return Method{
-		Id:          x.Id,
-		ServiceName: x.ServiceName,
-		MethodName:  x.MethodName,
-		Request:     x.Request.ProtoReflect().New().Interface(),
-		Reply:       x.Reply.ProtoReflect().New().Interface(),
-	}
-}
-
-type Session struct {
-	net.Conn
-	grpcx.Client
-	buffsize int
-	timeout  time.Duration
-	Methods  []Method
-	pb.UnimplementedParkourServer
-}
-
-func (x *Session) Close() error {
-	return nil
-}
-
-func (x *Session) serve(ctx context.Context) (err error) {
-	defer func() {
-		if err := recover(); err != nil {
-			log.Error(err)
-		}
-		if err != nil {
-			log.Error(err.Error())
-			debug.PrintStack()
-		}
-		if err := x.Close(); err != nil {
-			log.Error(err.Error())
-		}
-	}()
-	buf := bufio.NewReaderSize(x.Conn, x.buffsize)
-	for {
-		select {
-		case <-ctx.Done():
-			return errors.New("shutdown")
-		default:
-		}
-		if err := x.Conn.SetReadDeadline(time.Now().Add(x.timeout)); err != nil {
-			return err
-		}
-		iMessage, err := decode(buf)
-		if err != nil {
-			return err
-		}
-		if x == nil {
-			continue
-		}
-		method := x.Methods[iMessage.method()]
-		methodName, req, reply := method.MethodName, method.Request, method.Reply
-		if err := proto.Unmarshal(iMessage.payload(), method.Request); err != nil {
-			return err
-		}
-		if err := x.Invoke(ctx, methodName, req, reply); err != nil {
-			return err
-		}
-		b, err := encode(iMessage.method(), method.Reply)
-		if err != nil {
-			return err
-		}
-		if _, err := x.Write(b); err != nil {
-			return err
-		}
-	}
-}
 
 type Message []byte
 
@@ -124,13 +37,14 @@ func decode(b *bufio.Reader) (Message, error) {
 	return iMessage, nil
 }
 
-func encode(method uint16, iMessage proto.Message) (Message, error) {
+func encode(seq uint32, method uint16, iMessage proto.Message) (Message, error) {
 	b, err := proto.Marshal(iMessage)
 	if err != nil {
 		return nil, err
 	}
 	buf := pool.Get().(*Message)
-	buf.WriteUint16(uint16(4 + len(b)))
+	buf.WriteUint16(uint16(8 + len(b)))
+	buf.WriteUint32(seq)
 	buf.WriteUint16(method)
 	if _, err := buf.Write(b); err != nil {
 		return nil, err
@@ -142,12 +56,24 @@ func (x Message) length() uint16 {
 	return binary.BigEndian.Uint16(x)
 }
 
+func (x Message) seq() uint32 {
+	return binary.BigEndian.Uint32(x[2:])
+}
+
 func (x Message) method() uint16 {
-	return binary.BigEndian.Uint16(x[2:])
+	return binary.BigEndian.Uint16(x[6:])
 }
 
 func (x Message) payload() []byte {
-	return x[4:x.length()]
+	return x[8:x.length()]
+}
+
+func (x Message) clone() (Message, error) {
+	clone := pool.Get().(*Message)
+	if _, err := clone.Write(x); err != nil {
+		return nil, err
+	}
+	return *clone, nil
 }
 
 func (x *Message) reset() {
