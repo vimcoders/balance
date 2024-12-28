@@ -4,10 +4,8 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"net"
-	"path/filepath"
 	"runtime/debug"
 	"sync"
 	"time"
@@ -20,9 +18,6 @@ import (
 
 type Client interface {
 	grpc.ClientConnInterface
-	Register(context.Context, any) error
-	Go(context.Context, string, proto.Message) error
-	RemoteAddr() net.Addr
 	Close() error
 }
 
@@ -37,9 +32,8 @@ type XClient struct {
 	net.Conn
 	grpc.ClientConnInterface
 	sync.RWMutex
-	handler any
 	seq     uint32
-	pending map[uint32]*stream
+	pending map[uint32]*sender
 	streams *sync.Pool
 }
 
@@ -53,13 +47,14 @@ func newClient(c net.Conn, opt Option) Client {
 	x := &XClient{
 		Option:  opt,
 		Conn:    c,
-		pending: make(map[uint32]*stream),
+		pending: make(map[uint32]*sender),
 	}
 	x.streams = &sync.Pool{
 		New: func() any {
 			seq := x.seq + 1
 			x.seq = seq % math.MaxUint32
-			return &stream{
+			return &sender{
+				Option:  opt,
 				seq:     seq,
 				Conn:    x.Conn,
 				signal:  make(chan Message, 1),
@@ -67,6 +62,7 @@ func newClient(c net.Conn, opt Option) Client {
 			}
 		},
 	}
+	go x.serve(context.Background())
 	return x
 }
 
@@ -74,69 +70,19 @@ func (x *XClient) Close() error {
 	return x.Conn.Close()
 }
 
-func (x *XClient) Register(ctx context.Context, a any) error {
-	if x.handler != nil {
-		return errors.New("x.svr  != nil")
-	}
-	x.handler = a
-	go x.serve(ctx)
-	return nil
-}
-
-func (x *XClient) Go(ctx context.Context, method string, req proto.Message) error {
-	for methodId := 0; methodId < len(x.Methods); methodId++ {
-		if filepath.Base(method) != x.Methods[methodId].MethodName {
-			continue
-		}
-		if err := x.push(0, uint16(methodId), req); err != nil {
-			return err
-		}
-		return nil
-	}
-	return fmt.Errorf("%s not registed", method)
-}
-
 func (x *XClient) Invoke(ctx context.Context, methodName string, req any, reply any, opts ...grpc.CallOption) (err error) {
-	for method := 0; method < len(x.Methods); method++ {
-		if x.Methods[method].MethodName != filepath.Base(methodName) {
-			continue
-		}
-		if err := x.invoke(ctx, uint16(method), req.(proto.Message), reply.(proto.Message)); err != nil {
-			return err
-		}
-		return nil
-	}
-	return errors.New(methodName)
-}
-
-func (x *XClient) invoke(ctx context.Context, method uint16, req, reply proto.Message) (err error) {
-	stream := x.streams.Get().(*stream)
-	x.addPending(stream)
-	response, err := stream.push(ctx, method, req)
+	sender := x.streams.Get().(*sender)
+	x.wait(sender)
+	response, err := sender.push(ctx, methodName, req.(proto.Message))
 	if err != nil {
-		x.done(stream.seq)
+		x.done(sender.seq)
 		return err
 	}
-	if err := proto.Unmarshal(response.payload(), reply); err != nil {
+	if err := proto.Unmarshal(response.payload(), reply.(proto.Message)); err != nil {
 		return err
 	}
 	response.reset()
-	x.streams.Put(stream)
-	return nil
-}
-
-func (x *XClient) push(seq uint32, method uint16, req proto.Message) (err error) {
-	buf, err := encode(seq, method, req)
-	if err != nil {
-		return err
-	}
-	if err := x.SetWriteDeadline(time.Now().Add(x.timeout)); err != nil {
-		return err
-	}
-	if _, err := buf.WriteTo(x.Conn); err != nil {
-		return err
-	}
-	buf.reset()
+	x.streams.Put(sender)
 	return nil
 }
 
@@ -171,23 +117,19 @@ func (x *XClient) serve(ctx context.Context) (err error) {
 		if ch == nil {
 			return nil
 		}
-		clone, err := iMessage.clone()
-		if err != nil {
-			return err
-		}
-		if err := ch.invoke(clone); err != nil {
+		if err := ch.invoke(iMessage.clone()); err != nil {
 			return err
 		}
 	}
 }
 
-func (x *XClient) addPending(s *stream) {
+func (x *XClient) wait(s *sender) {
 	x.Lock()
 	defer x.Unlock()
 	x.pending[s.seq] = s
 }
 
-func (x *XClient) done(seq uint32) *stream {
+func (x *XClient) done(seq uint32) *sender {
 	x.Lock()
 	defer x.Unlock()
 	if v, ok := x.pending[seq]; ok {

@@ -80,14 +80,14 @@ func GenerateTLSConfig() *tls.Config {
 
 func BenchmarkQUIC(b *testing.B) {
 	fmt.Println(runtime.NumCPU())
-	cli, err := grpcx.Dial("udp", "127.0.0.1:28889", grpcx.Option{Methods: pb.Parkour_ServiceDesc.Methods})
+	cc, err := grpcx.Dial("udp", "127.0.0.1:28889", grpcx.WithDialServiceDesc(pb.Parkour_ServiceDesc))
 	if err != nil {
 		fmt.Println(err.Error())
 		return
 	}
-	cli.Register(context.Background(), cli)
+	client := pb.NewParkourClient(cc)
 	for i := 0; i < b.N; i++ {
-		if err := cli.Go(context.Background(), "Login", &pb.LoginRequest{Token: "token"}); err != nil {
+		if _, err := client.Login(context.Background(), &pb.LoginRequest{Token: "token"}); err != nil {
 			fmt.Println(err.Error())
 			return
 		}

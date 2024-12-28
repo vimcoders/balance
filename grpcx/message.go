@@ -68,12 +68,10 @@ func (x Message) payload() []byte {
 	return x[8:x.length()]
 }
 
-func (x Message) clone() (Message, error) {
+func (x Message) clone() Message {
 	clone := pool.Get().(*Message)
-	if _, err := clone.Write(x); err != nil {
-		return nil, err
-	}
-	return *clone, nil
+	*clone = append(*clone, x...)
+	return *clone
 }
 
 func (x *Message) reset() {

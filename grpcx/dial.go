@@ -7,9 +7,41 @@ import (
 	"time"
 
 	"github.com/vimcoders/go-driver/quicx"
+	"google.golang.org/grpc"
 )
 
-func Dial(network string, addr string, opt Option) (Client, error) {
+type DialOption interface {
+	apply(*Option)
+}
+
+type funcDialOption struct {
+	f func(*Option)
+}
+
+func (x *funcDialOption) apply(o *Option) {
+	x.f(o)
+}
+
+func WithDialServiceDesc(info grpc.ServiceDesc) DialOption {
+	return newFuncDialOption(func(o *Option) {
+		o.Methods = info.Methods
+	})
+}
+
+func newFuncDialOption(f func(*Option)) *funcDialOption {
+	return &funcDialOption{
+		f: f,
+	}
+}
+
+func Dial(network string, addr string, opts ...DialOption) (Client, error) {
+	opt := Option{
+		buffsize: 1024,
+		timeout:  time.Minute,
+	}
+	for i := 0; i < len(opts); i++ {
+		opts[i].apply(&opt)
+	}
 	switch network {
 	case "udp":
 		conn, err := quicx.Dial(addr, &tls.Config{
